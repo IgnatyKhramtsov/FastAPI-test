@@ -6,7 +6,7 @@ from datetime import datetime
 import uvicorn
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 from fastapi import FastAPI
-from sqlalchemy import select, insert
+from sqlalchemy import select, insert, Integer, func
 
 from config import loop, settings
 from database import async_engine, sync_engine, async_session_factory
@@ -15,15 +15,15 @@ from models import metadata, parstext
 app = FastAPI(docs_url='/')
 
 
-def create_table():
-    metadata.drop_all(sync_engine)
-    metadata.create_all(sync_engine)
-
 
 @app.on_event("startup")
-async def startup_event():
-    metadata.drop_all(sync_engine)
-    metadata.create_all(sync_engine)
+async def create_tables():
+    async with async_engine.begin() as conn:
+        # await conn.run_sync(metadata.drop_all)
+        await conn.run_sync(metadata.create_all)
+# async def startup_event():
+#     metadata.drop_all(sync_engine)
+#     metadata.create_all(sync_engine)
 
 
 @app.post('/')
@@ -38,7 +38,6 @@ async def send_messages():
                 x_count = line.strip().count('х')
                 val_json = json.dumps({"datetime": str(datetime.utcnow()), "title": "O_Genry", "count_x": x_count}).encode('utf-8')
                 await producer.send("my_topic", value=val_json)
-                await asyncio.sleep(3)
     finally:
         print('Завершение продюсера')
         await producer.stop()
@@ -65,23 +64,28 @@ async def consume():
     await consumer.start()
     try:
         # Consume messages
-        async for msg in consumer:
-            val_json = json.loads(msg.value.decode('utf-8'))
-            print("consumed: ", val_json)
-            async with async_engine.connect() as conn:
+        async with async_engine.connect() as conn:
+            async for msg in consumer:
+                val_json = json.loads(msg.value.decode('utf-8'))
+                print("consumed: ", val_json)
                 stmt = insert(parstext).values(**val_json)
                 await conn.execute(stmt)
                 await conn.commit()
+                await asyncio.sleep(3)
     finally:
         print("Завершение консюмера")
         await consumer.stop()
 
 asyncio.create_task(consume())
 
-@app.get('/x')
+@app.get('/avd_x')
 async def get_avg_x():
     async with async_session_factory() as session:
-        query = select(parstext)
+        query = (
+            select(parstext.c.datetime, parstext.c.title,
+            func.avg(parstext.c.count_x).label("x_avg_count_in_line"))
+            .group_by(parstext.c.datetime, parstext.c.title)
+        )
         result = await session.execute(query)
     return result.mappings().all()
 
