@@ -5,7 +5,7 @@ from datetime import datetime
 
 import uvicorn
 from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks, UploadFile
 from sqlalchemy import select, insert, Integer, func
 
 from config import loop, settings
@@ -19,37 +19,35 @@ app = FastAPI(docs_url='/')
 @app.on_event("startup")
 async def create_tables():
     async with async_engine.begin() as conn:
-        # await conn.run_sync(metadata.drop_all)
+        await conn.run_sync(metadata.drop_all)
         await conn.run_sync(metadata.create_all)
 # async def startup_event():
 #     metadata.drop_all(sync_engine)
 #     metadata.create_all(sync_engine)
 
-
-@app.post('/')
-async def send_messages():
+async def process_file_content(file, file_name):
     producer = AIOKafkaProducer(loop=loop, bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS)
     await producer.start()
 
     try:
-        with open('O_Genri_Testovaya_20_vmeste (1).txt', encoding='utf-8') as file:
-            for line in file:
+        date_now = str(datetime.utcnow())
+        for line in file.split("\n"):
+            if line := line.strip():
                 # print(f"Посылаем в топик сообщение: {line}")
-                x_count = line.strip().count('х')
-                val_json = json.dumps({"datetime": str(datetime.utcnow()), "title": "O_Genry", "count_x": x_count}).encode('utf-8')
+                x_count = line.count('х')
+                val_json = json.dumps(
+                    {"datetime": date_now, "title": file_name, "text": line, "count_x": x_count}).encode('utf-8')
                 await producer.send("my_topic", value=val_json)
+                await asyncio.sleep(3)
     finally:
         print('Завершение продюсера')
         await producer.stop()
 
-
-async def insert_data(val_json):
-    async with async_session_factory as session:
-        stmt = insert(parstext).values(**val_json.model_dump())
-        print("Запись в БД")
-        await session.execute(stmt)
-        await session.commit()
-    return
+@app.post('/')
+async def send_messages(file: UploadFile, background_tasks: BackgroundTasks):
+    file_name = file.filename
+    content = file.file.read().decode()
+    background_tasks.add_task(process_file_content, content, file_name)
 
 
 # Initialize Kafka consumer
@@ -71,7 +69,7 @@ async def consume():
                 stmt = insert(parstext).values(**val_json)
                 await conn.execute(stmt)
                 await conn.commit()
-                await asyncio.sleep(3)
+                # await asyncio.sleep(3)
     finally:
         print("Завершение консюмера")
         await consumer.stop()
