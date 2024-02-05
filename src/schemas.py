@@ -9,5 +9,8 @@ class ParstxtCreate(BaseModel):
     title: str
     count_x: int
 
-class Message(BaseModel):
-    message: str
+
+class Get_Avg_X(BaseModel):
+    datetime: str
+    title: str
+    x_avg_count_in_line: float
