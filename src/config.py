@@ -1,19 +1,19 @@
 import asyncio
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-loop = asyncio.get_event_loop()
+# loop = asyncio.get_event_loop()
 
 
 class Settings(BaseSettings):
     DB_HOST: str
     DB_PORT: int
     DB_USER: str
-    DB_PASS: int
+    DB_PASS: str
     DB_NAME: str
 
     KAFKA_BOOTSTRAP_SERVERS: str
-    KAFKA_TOPIC: str
-    KAFKA_CONSUMER_GROUP: str
+    # KAFKA_TOPIC: str
+    # KAFKA_CONSUMER_GROUP: str
 
     @property
     def DATABASE_URL_asyncpg(self):

@@ -1,0 +1,49 @@
+version: '3.7'
+
+services:
+  db:
+    image: postgres:16
+    container_name: db_app
+    env_file:
+      - .env_non_dev
+    networks:
+      - custom
+
+  app:
+    build:
+      context: .
+    env_file:
+      - .env_non_dev
+    container_name: fastapi_app
+    ports:
+      - 8003:8000
+    depends_on:
+      - db
+      - kafka
+      - zookeepers
+    networks:
+      - custom
+
+
+  zookeepers:
+    image: wurstmeister/zookeeper
+    container_name: zookeeper_app
+    ports:
+      - "2181:2181"
+    networks:
+      - custom
+
+  kafka:
+    image: wurstmeister/kafka
+    container_name: kafka_app
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: localhost
+      KAFKA_ZOOKEEPER_CONNECT: zookeepers:2181
+    networks:
+      - custom
+
+networks:
+  custom:
+    driver: bridge
